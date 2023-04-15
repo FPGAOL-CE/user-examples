@@ -1,4 +1,5 @@
-# FPGAOL1
+# FPGAOL2
+# 50 MHz clk
 set_property -dict {PACKAGE_PIN B8 IOSTANDARD LVCMOS33} [get_ports {clk}];
 
 set_property -dict {PACKAGE_PIN K17 IOSTANDARD LVCMOS33} [get_ports {led[0]}];

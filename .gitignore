@@ -1,1 +1,6 @@
 build
+.caas.conf
+*.zip
+.jobid
+Makefile.caas
+run_caas.sh

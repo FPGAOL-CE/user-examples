@@ -9,7 +9,7 @@ module top(
 	input [1:0]sw
     );
 
-	wire psclk = FCLK_CLK_buffered[sw];
+	wire psclk = FCLK_CLK_buffered[0];
 	reg [31:0]cnt = 0;
 	always @ (posedge psclk) begin
 		cnt <= cnt + 1;

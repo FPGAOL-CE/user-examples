@@ -1,3 +1,11 @@
+## User Examples for various FOSS FPGA toolchains
+
+### Use together with CaaS Wizard! 
+
+### Zynq 7000 PS + PL
+
+With [GenZ](https://github.com/regymm/GenZ) and [OpenXC7](https://github.com/OpenXC7), full Zynq 7000 SoC development can be done with open-source toolchains. See examples [here](./zynq7000-demos). 
+
 ## FPGAOL User Examples
 
 #### [fpgaol](fpgaol1)

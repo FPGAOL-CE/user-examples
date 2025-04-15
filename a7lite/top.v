@@ -1,5 +1,3 @@
-// FPGAOL tests
-// by petergu 2022.3.8 
 `timescale 1ns / 1ps
  
 module top(

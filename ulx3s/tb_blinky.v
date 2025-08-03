@@ -72,7 +72,7 @@ module tb_blinky();
     
     // Optional: Create a VCD file for waveform viewing
     initial begin
-        $dumpfile("tb_blinky.vcd");
+        $dumpfile("wave.vcd");
         $dumpvars(0, tb_blinky);
     end
     

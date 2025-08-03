@@ -53,6 +53,8 @@ module tb_top();
     
     // Monitor outputs
     initial begin
+        $dumpfile("wave.vcd");
+        $dumpvars(0, tb_top);
         $monitor("Time=%0t clk=%b btn=%b led=%b", $time, clk, btn, led);
     end
     

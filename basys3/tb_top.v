@@ -47,6 +47,8 @@ module tb_top();
     
     // Monitor outputs
     initial begin
+        $dumpfile("wave.vcd");
+        $dumpvars(0, tb_top);
         $monitor("Time=%0t CLK100MHZ=%b sw=%h LED=%h", $time, CLK100MHZ, sw, LED);
     end
     

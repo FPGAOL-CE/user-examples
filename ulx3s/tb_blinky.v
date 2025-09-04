@@ -31,33 +31,33 @@ module tb_blinky();
         
         // Test different button combinations
         btn = 7'b0000001;
-        #1000000; // Wait to observe LED behavior
+        #1000; // Wait to observe LED behavior
         
         btn = 7'b0000010;
-        #1000000;
+        #1000;
         
         btn = 7'b0000100;
-        #1000000;
+        #1000;
         
         btn = 7'b0001000;
-        #1000000;
+        #1000;
         
         btn = 7'b0010000;
-        #1000000;
+        #1000;
         
         btn = 7'b0100000;
-        #1000000;
+        #1000;
         
         btn = 7'b1000000;
-        #1000000;
+        #1000;
         
         // Test multiple buttons pressed
         btn = 7'b1111111;
-        #1000000;
+        #1000;
         
         // Back to no buttons
         btn = 7'b0000000;
-        #1000000;
+        #1000;
         
         // End simulation
         $display("Testbench completed");

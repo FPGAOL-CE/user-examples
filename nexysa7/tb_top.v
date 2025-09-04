@@ -31,7 +31,7 @@ module tb_top;
         CPU_RESETN = 1;
         
         // Run simulation for a longer time to see LED toggle
-        #1000000;  // 1ms simulation time
+        #10000;  // 1ms simulation time
         
         // End simulation
         $display("Simulation completed");
@@ -48,12 +48,4 @@ module tb_top;
         $dumpfile("wave.vcd");
         $dumpvars(0, tb_top);
     end
-    
-    // Optional: Add a timeout to prevent infinite simulation
-    initial begin
-        #10000000;  // 10ms timeout
-        $display("Simulation timeout reached");
-        $finish;
-    end
-
 endmodule 

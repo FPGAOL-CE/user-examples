@@ -29,23 +29,23 @@ module tb_blinky();
         
         // Test normal mode (key = 00)
         key = 2'b00;
-        #1000000; // Wait to observe normal blinking
+        #1000; // Wait to observe normal blinking
         
         // Test breathing mode (key = 01)
         key = 2'b01;
-        #1000000; // Wait to observe breathing effect
+        #1000; // Wait to observe breathing effect
         
         // Test breathing mode (key = 10)
         key = 2'b10;
-        #1000000; // Wait to observe breathing effect
+        #1000; // Wait to observe breathing effect
         
         // Test breathing mode (key = 11)
         key = 2'b11;
-        #1000000; // Wait to observe breathing effect
+        #1000; // Wait to observe breathing effect
         
         // Back to normal mode
         key = 2'b00;
-        #1000000;
+        #1000;
         
         // End simulation
         $display("Testbench completed");

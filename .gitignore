@@ -4,3 +4,5 @@ build
 .jobid
 Makefile.caas
 run_caas.sh
+chipdb
+work

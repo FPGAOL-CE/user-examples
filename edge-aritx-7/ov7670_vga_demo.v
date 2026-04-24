@@ -37,7 +37,14 @@ module ov7670_vga_demo (
     output vga_vsync,           // Vertical sync
     output [3:0] vga_r,         // Red [3:0]
     output [3:0] vga_g,         // Green [3:0]
-    output [3:0] vga_b          // Blue [3:0]
+    output [3:0] vga_b,         // Blue [3:0]
+
+    // 1.8-inch SPI TFT
+    output tft_sck,
+    output tft_sdi,
+    output tft_dc,
+    output tft_reset,
+    output tft_cs
 );
 
     localparam H_ACTIVE = 640;
@@ -59,6 +66,16 @@ module ov7670_vga_demo (
     wire clk_25mhz;
     wire mmcm_fb_out;
     wire mmcm_locked;
+    wire display_tft = sw[1];
+    wire reset_db;
+
+    debounce #(
+        .COUNTER_WIDTH(20)
+    ) reset_debounce (
+        .clk(clk),
+        .din(sw[0]),
+        .dout(reset_db)
+    );
 
     MMCME2_ADV #(
         .BANDWIDTH("OPTIMIZED"),
@@ -76,7 +93,7 @@ module ov7670_vga_demo (
         .CLKOUT0(clk_25mhz_raw),
         .LOCKED(mmcm_locked),
         .PWRDWN(1'b0),
-        .RST(sw[0])
+        .RST(reset_db)
     );
 
     BUFG clk_25mhz_bufg (
@@ -180,20 +197,18 @@ module ov7670_vga_demo (
     wire vga_active = (vga_x < H_ACTIVE) && (vga_y < V_ACTIVE);
     wire [ADDR_WIDTH-1:0] vga_linear_addr = (vga_y * H_ACTIVE) + vga_x;
 
-    reg [ADDR_WIDTH-1:0] fb_rd_addr = {ADDR_WIDTH{1'b0}};
     reg                  vga_active_d = 1'b0;
     wire [3:0]           fb_rd_pixel;
+    wire [ADDR_WIDTH-1:0] tft_fb_addr;
+    wire [ADDR_WIDTH-1:0] fb_rd_addr = display_tft ? tft_fb_addr :
+                                       (vga_active ? vga_linear_addr : {ADDR_WIDTH{1'b0}});
+    wire [3:0] tft_debug;
 
     always @(posedge clk_25mhz) begin
         if (!mmcm_locked) begin
-            fb_rd_addr <= {ADDR_WIDTH{1'b0}};
             vga_active_d <= 1'b0;
         end else begin
             vga_active_d <= vga_active;
-            if (vga_active)
-                fb_rd_addr <= vga_linear_addr;
-            else
-                fb_rd_addr <= {ADDR_WIDTH{1'b0}};
         end
     end
 
@@ -211,9 +226,9 @@ module ov7670_vga_demo (
         .rd_data(fb_rd_pixel)
     );
 
-    assign vga_r = vga_active_d ? fb_rd_pixel : 4'h0;
-    assign vga_g = vga_active_d ? fb_rd_pixel : 4'h0;
-    assign vga_b = vga_active_d ? fb_rd_pixel : 4'h0;
+    assign vga_r = (!display_tft && vga_active_d) ? fb_rd_pixel : 4'h0;
+    assign vga_g = (!display_tft && vga_active_d) ? fb_rd_pixel : 4'h0;
+    assign vga_b = (!display_tft && vga_active_d) ? fb_rd_pixel : 4'h0;
 
     ov7670_sccb_init camera_init (
         .clk(clk_25mhz),
@@ -224,6 +239,309 @@ module ov7670_vga_demo (
         .busy(cam_cfg_busy),
         .done(cam_cfg_done)
     );
+
+    tft_display_scanout tft_scanout (
+        .clk(clk_25mhz),
+        .reset(!mmcm_locked),
+        .enable(display_tft),
+        .fb_pixel(fb_rd_pixel),
+        .fb_addr(tft_fb_addr),
+        .tft_sck(tft_sck),
+        .tft_sdi(tft_sdi),
+        .tft_dc(tft_dc),
+        .tft_reset(tft_reset),
+        .tft_cs(tft_cs),
+        .debug(tft_debug)
+    );
+
+endmodule
+
+module debounce #(
+    parameter COUNTER_WIDTH = 20
+) (
+    input clk,
+    input din,
+    output reg dout = 1'b0
+);
+
+    reg din_meta = 1'b0;
+    reg din_sync = 1'b0;
+    reg [COUNTER_WIDTH-1:0] stable_count = {COUNTER_WIDTH{1'b0}};
+
+    always @(posedge clk) begin
+        din_meta <= din;
+        din_sync <= din_meta;
+
+        if (din_sync == dout) begin
+            stable_count <= {COUNTER_WIDTH{1'b0}};
+        end else begin
+            stable_count <= stable_count + 1'b1;
+            if (&stable_count) begin
+                dout <= din_sync;
+                stable_count <= {COUNTER_WIDTH{1'b0}};
+            end
+        end
+    end
+
+endmodule
+
+module tft_display_scanout (
+    input clk,
+    input reset,
+    input enable,
+    input [3:0] fb_pixel,
+    output reg [18:0] fb_addr,
+    output tft_sck,
+    output tft_sdi,
+    output tft_dc,
+    output tft_reset,
+    output tft_cs,
+    output [3:0] debug
+);
+
+    localparam TFT_W = 128;
+    localparam TFT_H = 160;
+    localparam SPI_DIV = 2;
+
+    localparam ST_HW_RESET_0   = 6'd0;
+    localparam ST_HW_RESET_1   = 6'd1;
+    localparam ST_INIT_LOAD    = 6'd2;
+    localparam ST_INIT_WAIT    = 6'd3;
+    localparam ST_STREAM_PREP  = 6'd4;
+    localparam ST_STREAM_REQ   = 6'd5;
+    localparam ST_STREAM_LATCH = 6'd6;
+    localparam ST_STREAM_HI    = 6'd7;
+    localparam ST_STREAM_HI_W  = 6'd8;
+    localparam ST_STREAM_LO    = 6'd9;
+    localparam ST_STREAM_LO_W  = 6'd10;
+    localparam ST_NEXT_PIXEL   = 6'd11;
+
+    localparam INIT_LEN = 18;
+
+    reg [7:0] init_byte [0:INIT_LEN-1];
+    reg       init_dc [0:INIT_LEN-1];
+    reg [15:0] init_delay [0:INIT_LEN-1];
+
+    initial begin
+        init_byte[0] = 8'h01; init_dc[0] = 1'b0; init_delay[0] = 16'd3750;
+        init_byte[1] = 8'h11; init_dc[1] = 1'b0; init_delay[1] = 16'd3750;
+        init_byte[2] = 8'h3A; init_dc[2] = 1'b0; init_delay[2] = 16'd0;
+        init_byte[3] = 8'h05; init_dc[3] = 1'b1; init_delay[3] = 16'd0;
+        init_byte[4] = 8'h36; init_dc[4] = 1'b0; init_delay[4] = 16'd0;
+        init_byte[5] = 8'hC8; init_dc[5] = 1'b1; init_delay[5] = 16'd0;
+        init_byte[6] = 8'h2A; init_dc[6] = 1'b0; init_delay[6] = 16'd0;
+        init_byte[7] = 8'h00; init_dc[7] = 1'b1; init_delay[7] = 16'd0;
+        init_byte[8] = 8'h00; init_dc[8] = 1'b1; init_delay[8] = 16'd0;
+        init_byte[9] = 8'h00; init_dc[9] = 1'b1; init_delay[9] = 16'd0;
+        init_byte[10] = 8'h7F; init_dc[10] = 1'b1; init_delay[10] = 16'd0;
+        init_byte[11] = 8'h2B; init_dc[11] = 1'b0; init_delay[11] = 16'd0;
+        init_byte[12] = 8'h00; init_dc[12] = 1'b1; init_delay[12] = 16'd0;
+        init_byte[13] = 8'h00; init_dc[13] = 1'b1; init_delay[13] = 16'd0;
+        init_byte[14] = 8'h00; init_dc[14] = 1'b1; init_delay[14] = 16'd0;
+        init_byte[15] = 8'h9F; init_dc[15] = 1'b1; init_delay[15] = 16'd0;
+        init_byte[16] = 8'h29; init_dc[16] = 1'b0; init_delay[16] = 16'd500;
+        init_byte[17] = 8'h2C; init_dc[17] = 1'b0; init_delay[17] = 16'd0;
+    end
+
+    reg [5:0] state = ST_HW_RESET_0;
+    reg [5:0] init_index = 6'd0;
+    reg [15:0] wait_counter = 16'd0;
+
+    reg spi_cs = 1'b1;
+    reg spi_dc = 1'b0;
+    reg spi_sck = 1'b0;
+    reg spi_sdi = 1'b0;
+    reg spi_busy = 1'b0;
+    reg [7:0] spi_shift = 8'd0;
+    reg [2:0] spi_bits = 3'd0;
+    reg spi_phase = 1'b0;
+    reg [1:0] spi_div = 2'd0;
+
+    reg [7:0] pixel_x = 8'd0;
+    reg [7:0] pixel_y = 8'd0;
+    reg [7:0] color_hi = 8'd0;
+    reg [7:0] color_lo = 8'd0;
+    reg tft_reset_r = 1'b0;
+
+    wire [9:0] src_x = {pixel_x, 2'b00} + pixel_x;
+    wire [8:0] src_y = {pixel_y, 1'b0} + pixel_y;
+    wire [18:0] scaled_addr = ({10'd0, src_y} << 9) + ({10'd0, src_y} << 7) + src_x;
+
+    assign tft_sck = spi_sck;
+    assign tft_sdi = spi_sdi;
+    assign tft_dc = spi_dc;
+    assign tft_cs = spi_cs;
+    assign tft_reset = tft_reset_r;
+    assign debug = {state[2:0], spi_busy};
+
+    always @(posedge clk) begin
+        if (reset) begin
+            state <= ST_HW_RESET_0;
+            init_index <= 6'd0;
+            wait_counter <= 16'd0;
+            pixel_x <= 8'd0;
+            pixel_y <= 8'd0;
+            color_hi <= 8'd0;
+            color_lo <= 8'd0;
+            fb_addr <= 19'd0;
+            tft_reset_r <= 1'b0;
+            spi_cs <= 1'b1;
+            spi_dc <= 1'b0;
+            spi_sck <= 1'b0;
+            spi_sdi <= 1'b0;
+            spi_busy <= 1'b0;
+            spi_shift <= 8'd0;
+            spi_bits <= 3'd0;
+            spi_phase <= 1'b0;
+            spi_div <= 2'd0;
+        end else begin
+            if (spi_busy) begin
+                if (spi_div == SPI_DIV - 1) begin
+                    spi_div <= 2'd0;
+                    if (!spi_phase) begin
+                        spi_sck <= 1'b0;
+                        spi_sdi <= spi_shift[7];
+                        spi_phase <= 1'b1;
+                    end else begin
+                        spi_sck <= 1'b1;
+                        spi_shift <= {spi_shift[6:0], 1'b0};
+                        spi_phase <= 1'b0;
+                        if (spi_bits == 3'd0) begin
+                            spi_busy <= 1'b0;
+                            spi_cs <= 1'b1;
+                        end else begin
+                            spi_bits <= spi_bits - 1'b1;
+                        end
+                    end
+                end else begin
+                    spi_div <= spi_div + 1'b1;
+                end
+            end else begin
+                spi_div <= 2'd0;
+                spi_sck <= 1'b0;
+                case (state)
+                    ST_HW_RESET_0: begin
+                        tft_reset_r <= 1'b0;
+                        init_index <= 6'd0;
+                        fb_addr <= 19'd0;
+                        if (wait_counter == 16'd2500) begin
+                            wait_counter <= 16'd0;
+                            state <= ST_HW_RESET_1;
+                        end else begin
+                            wait_counter <= wait_counter + 1'b1;
+                        end
+                    end
+
+                    ST_HW_RESET_1: begin
+                        tft_reset_r <= 1'b1;
+                        if (wait_counter == 16'd2500) begin
+                            wait_counter <= 16'd0;
+                            state <= ST_INIT_LOAD;
+                        end else begin
+                            wait_counter <= wait_counter + 1'b1;
+                        end
+                    end
+
+                    ST_INIT_LOAD: begin
+                        spi_cs <= 1'b0;
+                        spi_dc <= init_dc[init_index];
+                        spi_shift <= init_byte[init_index];
+                        spi_bits <= 3'd7;
+                        spi_phase <= 1'b0;
+                        spi_busy <= 1'b1;
+                        state <= ST_INIT_WAIT;
+                    end
+
+                    ST_INIT_WAIT: begin
+                        if (init_delay[init_index] != 16'd0) begin
+                            if (wait_counter == init_delay[init_index]) begin
+                                wait_counter <= 16'd0;
+                                if (init_index == INIT_LEN - 1) begin
+                                    state <= ST_STREAM_PREP;
+                                end else begin
+                                    init_index <= init_index + 1'b1;
+                                    state <= ST_INIT_LOAD;
+                                end
+                            end else begin
+                                wait_counter <= wait_counter + 1'b1;
+                            end
+                        end else begin
+                            if (init_index == INIT_LEN - 1) begin
+                                state <= ST_STREAM_PREP;
+                            end else begin
+                                init_index <= init_index + 1'b1;
+                                state <= ST_INIT_LOAD;
+                            end
+                        end
+                    end
+
+                    ST_STREAM_PREP: begin
+                        pixel_x <= 8'd0;
+                        pixel_y <= 8'd0;
+                        state <= ST_STREAM_REQ;
+                    end
+
+                    ST_STREAM_REQ: begin
+                        if (enable) begin
+                            fb_addr <= scaled_addr;
+                            state <= ST_STREAM_LATCH;
+                        end
+                    end
+
+                    ST_STREAM_LATCH: begin
+                        color_hi <= {fb_pixel, fb_pixel[3], fb_pixel[3:1]};
+                        color_lo <= {fb_pixel[0], fb_pixel[3:2], fb_pixel, fb_pixel[3]};
+                        state <= ST_STREAM_HI;
+                    end
+
+                    ST_STREAM_HI: begin
+                        spi_cs <= 1'b0;
+                        spi_dc <= 1'b1;
+                        spi_shift <= color_hi;
+                        spi_bits <= 3'd7;
+                        spi_phase <= 1'b0;
+                        spi_busy <= 1'b1;
+                        state <= ST_STREAM_HI_W;
+                    end
+
+                    ST_STREAM_HI_W: begin
+                        state <= ST_STREAM_LO;
+                    end
+
+                    ST_STREAM_LO: begin
+                        spi_cs <= 1'b0;
+                        spi_dc <= 1'b1;
+                        spi_shift <= color_lo;
+                        spi_bits <= 3'd7;
+                        spi_phase <= 1'b0;
+                        spi_busy <= 1'b1;
+                        state <= ST_STREAM_LO_W;
+                    end
+
+                    ST_STREAM_LO_W: begin
+                        state <= ST_NEXT_PIXEL;
+                    end
+
+                    ST_NEXT_PIXEL: begin
+                        if (pixel_x == TFT_W - 1) begin
+                            pixel_x <= 8'd0;
+                            if (pixel_y == TFT_H - 1)
+                                pixel_y <= 8'd0;
+                            else
+                                pixel_y <= pixel_y + 1'b1;
+                        end else begin
+                            pixel_x <= pixel_x + 1'b1;
+                        end
+                        state <= ST_STREAM_REQ;
+                    end
+
+                    default: begin
+                        state <= ST_HW_RESET_0;
+                    end
+                endcase
+            end
+        end
+    end
 
 endmodule
 

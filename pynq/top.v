@@ -1,4 +1,4 @@
-// Basys3 test
+// PYNQ-Z1 test
 // by petergu 2023.4.23
 `timescale 1ns / 1ps
 //`define NOPS7
@@ -11,7 +11,7 @@ module top(
 
 	wire psclk = FCLK_CLK_buffered[0];
 	reg [31:0]cnt = 0;
-	always @ (posedge psclk) begin
+	always @ (posedge clk /*psclk*/) begin
 		cnt <= cnt + 1;
 	end
 	assign led[3:2] = cnt[28:27];

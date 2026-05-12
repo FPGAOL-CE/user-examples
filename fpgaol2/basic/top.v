@@ -9,9 +9,7 @@ module top(
 	output uart_tx0,
 	input uart_rx0,
 	output reg [2:0]hexplay0_an = 0,
-	output [3:0]hexplay0_d,
-	output [2:0]hexplay1_an,
-	output [3:0]hexplay1_d
+	output [3:0]hexplay0_d
     );
 	reg [31:0]hexplay_cnt = 0;
 	always @ (posedge clk) begin

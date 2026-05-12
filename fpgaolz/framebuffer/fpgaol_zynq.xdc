@@ -10,7 +10,7 @@ set_property -dict { PACKAGE_PIN A16   IOSTANDARD LVCMOS33 } [get_ports {led[5]}
 set_property -dict { PACKAGE_PIN A13   IOSTANDARD LVCMOS33 } [get_ports {led[6]}]
 set_property -dict { PACKAGE_PIN A14   IOSTANDARD LVCMOS33 } [get_ports {led[7]}]
 
-set_property -dict { PACKAGE_PIN B17   IOSTANDARD LVCMOS33 } [get_ports {sw0}]
+set_property -dict { PACKAGE_PIN B17   IOSTANDARD LVCMOS33 } [get_ports {sw[0]}]
 set_property -dict { PACKAGE_PIN B18   IOSTANDARD LVCMOS33 } [get_ports {sw[1]}]
 set_property -dict { PACKAGE_PIN D17   IOSTANDARD LVCMOS33 } [get_ports {sw[2]}]
 set_property -dict { PACKAGE_PIN C17   IOSTANDARD LVCMOS33 } [get_ports {sw[3]}]
